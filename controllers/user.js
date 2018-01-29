@@ -67,39 +67,45 @@ function saveUser(req, res){
         });
     }
 }
-// Metodo de login de usuario
+// Metodo de Login
 function loginUser(req, res){
+
+    // Comprobar que el usuario existe
     var params = req.body;
 
     var email = params.email;
     var password = params.password;
 
-    User.findOne({ email: email}, (err, user) => {
-       if(err) return res.status(500).send({ message: 'Error en la peticion'});
+    User.findOne({ email: email.toLowerCase()}, (err, user) => {
+        if(err){
+            res.status(500).send({ message: 'Error al comprobar que el usuario existe' });
+        }else{
+            if(user){
+                bcrypt.compare(password, user.password, (err, check) => {
+                    if(check){
+                        // Comprobar si existe gettoken y Generar el Token
+                        if (params.gettoken) {
+                            // Devolver el Token
+                            res.status(200).send({
+                                token: jwt.createToken(user)
+                            });
+                        } else {
+                            user.password = undefined;
+                            res.status(200).send({user});
+                        }
 
-       if(user){
-           // El metodo compare valida que la contraseña en claro sea igual a la encriptada
-           bcrypt.compare(password, user.password, (err, check) => {
-               if(check){
-                    // Devolver datos del usuario
-                   if(params.gettoken){
-                       // Generar y devolver token
-                       return res.status(200).send({
-                            token: jwt.createToken(user)
-                       });
-                   }else{
-                       // Devolver datos del usuario
-                       user.password = undefined;
-                       return res.status(200).send({user})
-                   }
-
-               }else{
-                   if(err) return res.status(404).send({ message: 'El usuario no se ha podido identificar'});
-               }
-           });
-       }else{
-           if(err) return res.status(404).send({ message: 'El usuario no se ha podido identificar!!'});
-       }
+                    }else{
+                        res.status(404).send({
+                            message: 'El usuario no ha podido loguearse correctamente'
+                        });
+                    }
+                });
+            }else{
+                res.status(404).send({
+                    message: 'El usuario no ha podido loguearse'
+                });
+            }
+        }
     });
 }
 // Conseguir datos de un usuario
@@ -138,6 +144,29 @@ function getUsers(req, res){
         });
     })
 }
+// Edicion de datos de usuario
+function updateUser(req, res){
+    var userId = req.params.id;
+    var update = req.body;
+
+    // borrar la propiedad password
+    delete update.password;
+
+    if(userId != req.user.sub){
+        return res.status(500).send({message: 'No tienes permiso para actualizar los datos del usuario'});
+    }
+
+    User.findByIdAndUpdate(userId, update, {new:true}, (err, userUpdated) => {
+        if(err) return res.status(500).send({message: 'Error en la petición'});
+
+        if(!userUpdated) return res.status(404).send({message: 'No se ha podido actualizar el usuario'});
+
+        return res.status(200).send({ user: userUpdated })
+    })
+
+}
+// Subir imagenes
+
 
 module.exports =  {
     home,
@@ -145,5 +174,6 @@ module.exports =  {
     saveUser,
     loginUser,
     getUser,
-    getUsers
+    getUsers,
+    updateUser
 }
